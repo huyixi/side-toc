@@ -17,7 +17,8 @@
   },
 
   "action": {
-    "default_icon": "icon128.png"
+    "default_icon": "icon128.png",
+    "default_title": "Click to open panel"
   },
 
   "content_scripts": [
@@ -31,7 +32,11 @@
     "service_worker": "js/background.js"
   },
 
-  "permissions": ["storage"],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+
+  "permissions": ["storage", "sidePanel"],
 
   "host_permissions": ["<all_urls>"]
 }

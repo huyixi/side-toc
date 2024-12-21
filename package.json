@@ -1,5 +1,5 @@
 {
-  "name": "SideTOC",
+  "name": "side-toc",
   "version": "1.0.0",
   "description": "Generates a table of contents for the current page based on header tags.",
   "main": "index.js",
@@ -10,26 +10,25 @@
     "test": "npx jest",
     "style": "prettier --write \"src/**/*.{ts,tsx}\""
   },
-  "author": "",
+  "author": "huyixi",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/huyixi/side-toc.git"
   },
   "dependencies": {
+    "chrome-types": "^0.1.327",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/chrome": "0.0.158",
-    "@types/jest": "^29.5.0",
     "@types/react": "^18.0.29",
     "@types/react-dom": "^18.0.11",
     "copy-webpack-plugin": "^9.0.1",
     "glob": "^7.1.6",
     "prettier": "^2.2.1",
     "rimraf": "^3.0.2 ",
-    "ts-jest": "^29.1.0",
     "ts-loader": "^8.0.0",
     "typescript": "^5.0.4",
     "webpack": "^5.94.0",
