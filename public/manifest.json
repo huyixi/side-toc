@@ -36,7 +36,7 @@
     "default_path": "sidepanel.html"
   },
 
-  "permissions": ["storage", "sidePanel", "tabs"],
+  "permissions": ["storage", "sidePanel", "tabs", "activeTab"],
 
   "host_permissions": ["<all_urls>"]
 }
