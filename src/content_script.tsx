@@ -1,6 +1,5 @@
 import { Children } from "react";
 
-// First, let's define interfaces for our heading types
 interface FlatHeading {
   text: string | null;
   level: number;
@@ -21,9 +20,7 @@ function extractHeading(): FlatHeading[] {
   return flatHeadings;
 }
 
-const convertToNestedHeading = (
-  flatHeadings: FlatHeading[]
-): NestedHeading[] => {
+const convertToNestedHeading = (flatHeadings: FlatHeading[]): NestedHeading[] => {
   const root: { Children: NestedHeading[] } = {
     Children: [],
   };
@@ -36,15 +33,13 @@ const convertToNestedHeading = (
       Children: [],
     };
 
-    while (
-      stack.length > 1 &&
-      (stack[stack.length - 1] as NestedHeading).level >= node.level
-    ) {
+    while (stack.length > 1 && (stack[stack.length - 1] as NestedHeading).level >= node.level) {
       stack.pop();
     }
     stack[stack.length - 1].Children.push(node);
     stack.push(node);
   }
+  console.log("root", root);
   return root.Children;
 };
 

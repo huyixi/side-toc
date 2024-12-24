@@ -1,6 +1,4 @@
-chrome.sidePanel
-  .setPanelBehavior({ openPanelOnActionClick: true })
-  .catch((error) => console.error(error));
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
 
 async function getActivateTabId() {
   try {
@@ -22,7 +20,6 @@ async function updateSidePanel() {
   const tabId = await getActivateTabId();
   if (tabId) {
     chrome.tabs.sendMessage(tabId, { action: "updateSidePanel" });
-    console.log("background script send updatesidepanel message");
   }
 }
 
