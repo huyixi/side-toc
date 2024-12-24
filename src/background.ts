@@ -1,4 +1,6 @@
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.error(error));
 
 async function getActivateTabId() {
   try {
@@ -26,5 +28,16 @@ async function updateSidePanel() {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === "complete") {
     updateSidePanel();
+  }
+});
+
+chrome.action.onClicked.addListener((tab) => {
+  console.log("tab1111", tab);
+  if (tab.id) {
+    console.log("tab22222", tab);
+    chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: updateSidePanel,
+    });
   }
 });

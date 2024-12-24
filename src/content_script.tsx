@@ -48,25 +48,40 @@ const convertToNestedHeading = (
   return root.Children;
 };
 
+const getPageInfo = () => {
+  const headings = extractHeading();
+  const nestedHeadings = convertToNestedHeading(headings);
+  const title = document.title || document.querySelector("h1");
+
+  return {
+    title,
+    nestedHeadings,
+  };
+};
+
+const sendPageInfo = () => {
+  const { title, nestedHeadings } = getPageInfo();
+  chrome.runtime.sendMessage({
+    action: "sendPageInfo",
+    title,
+    nestedHeadings,
+  });
+};
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.action === "updateSidePanel") {
-    const headings = extractHeading();
-    const nestedHeadings = convertToNestedHeading(headings);
-    const title = document.title || document.querySelector("h1");
-
-    chrome.runtime.sendMessage({
-      action: "sendPageInfo",
-      title,
-      nestedHeadings,
-    });
+    sendPageInfo();
   } else if (message && message.action === "scrollToHeading") {
     const headingText = message.headingText;
     scrollToHeading(headingText);
   }
 });
+
 function scrollToHeading(headingText: string) {
   const heading = Array.from(
     document.querySelectorAll("h1, h2, h3, h4, h5, h6")
   ).find((h) => h.textContent === headingText);
   heading?.scrollIntoView({ behavior: "smooth" });
 }
+
+getPageInfo();
