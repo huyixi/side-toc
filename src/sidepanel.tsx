@@ -33,8 +33,29 @@ const SidePanel = () => {
       <ul>
         {data.map((heading: NestedHeading) => (
           <li key={heading.text}>
-            {heading.text}
-            {heading.Children && heading.Children.length > 0 && <HeadingTree data={heading.Children} />}
+            <a
+              href={`#${heading.text?.toLowerCase().replace(/\s+/g, "-")}`}
+              onClick={(e) => {
+                e.preventDefault();
+                console.log("clicked on heading", heading.text);
+                chrome.tabs.query(
+                  { active: true, currentWindow: true },
+                  ([tab]) => {
+                    if (tab.id) {
+                      chrome.tabs.sendMessage(tab.id, {
+                        action: "scrollToHeading",
+                        headingText: heading.text,
+                      });
+                    }
+                  }
+                );
+              }}
+            >
+              {heading.text}
+            </a>
+            {heading.Children && heading.Children.length > 0 && (
+              <HeadingTree data={heading.Children} />
+            )}
           </li>
         ))}
       </ul>
