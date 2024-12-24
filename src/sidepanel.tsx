@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import "./styles.css";
 
 const SidePanel = () => {
   const [nestedHeading, setNestedHeading] = useState([]);
@@ -30,7 +31,7 @@ const SidePanel = () => {
     }
 
     return (
-      <ul>
+      <ul className="heading-tree-x">
         {data.map((heading: NestedHeading) => (
           <li key={heading.text}>
             <a

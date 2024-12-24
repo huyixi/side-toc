@@ -20,9 +20,7 @@ function extractHeading(): FlatHeading[] {
   return flatHeadings;
 }
 
-const convertToNestedHeading = (
-  flatHeadings: FlatHeading[]
-): NestedHeading[] => {
+const convertToNestedHeading = (flatHeadings: FlatHeading[]): NestedHeading[] => {
   const root: { Children: NestedHeading[] } = {
     Children: [],
   };
@@ -35,10 +33,7 @@ const convertToNestedHeading = (
       Children: [],
     };
 
-    while (
-      stack.length > 1 &&
-      (stack[stack.length - 1] as NestedHeading).level >= node.level
-    ) {
+    while (stack.length > 1 && (stack[stack.length - 1] as NestedHeading).level >= node.level) {
       stack.pop();
     }
     stack[stack.length - 1].Children.push(node);
@@ -64,12 +59,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     scrollToHeading(headingText);
   }
 });
-
 function scrollToHeading(headingText: string) {
-  const heading = Array.from(
-    document.querySelectorAll("h1, h2, h3, h4, h5, h6")
-  ).find((h) => h.textContent === headingText);
-  if (heading) {
-    heading.scrollIntoView({ behavior: "smooth" });
-  }
+  const heading = Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6")).find((h) => h.textContent === headingText);
+  heading?.scrollIntoView({ behavior: "smooth" });
 }
