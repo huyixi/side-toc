@@ -22,6 +22,7 @@ const SidePanel = () => {
 
   interface NestedHeading {
     text: string;
+    level: number;
     Children?: NestedHeading[];
   }
 
@@ -33,7 +34,10 @@ const SidePanel = () => {
     return (
       <ul className="heading-tree-x">
         {data.map((heading: NestedHeading) => (
-          <li key={heading.text}>
+          <li
+            key={heading.text}
+            style={{ marginLeft: `${heading.level * 4}px` }}
+          >
             <a
               href={`#${heading.text?.toLowerCase().replace(/\s+/g, "-")}`}
               onClick={(e) => {
