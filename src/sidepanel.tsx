@@ -4,13 +4,13 @@ import "./styles.css";
 
 const SidePanel = () => {
   const [nestedHeading, setNestedHeading] = useState([]);
+  const [title, setTitle] = useState("");
 
   useEffect(() => {
     const messageListener = (message: any, sender: any, sendResponse: any) => {
-      if (message && message.action === "sendNestedHeadings") {
-        console.log("received nestedHeadings", message.nestedHeadings);
+      if (message && message.action === "sendPageInfo") {
         setNestedHeading(message.nestedHeadings);
-        console.log("nestedHeading", nestedHeading);
+        setTitle(message.title);
       }
       return true;
     };
@@ -42,7 +42,6 @@ const SidePanel = () => {
               href={`#${heading.text?.toLowerCase().replace(/\s+/g, "-")}`}
               onClick={(e) => {
                 e.preventDefault();
-                console.log("clicked on heading", heading.text);
                 chrome.tabs.query(
                   { active: true, currentWindow: true },
                   ([tab]) => {
@@ -69,7 +68,7 @@ const SidePanel = () => {
 
   return (
     <>
-      <h1>side panel</h1>
+      <h1>{title}</h1>
       <div>
         <HeadingTree data={nestedHeading} />
       </div>

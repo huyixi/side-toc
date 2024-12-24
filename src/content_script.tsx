@@ -10,7 +10,7 @@ interface NestedHeading extends FlatHeading {
 }
 
 function extractHeading(): FlatHeading[] {
-  const headings = document.querySelectorAll("h1, h2, h3, h4, h5, h6");
+  const headings = document.querySelectorAll("h2, h3, h4, h5, h6");
 
   const flatHeadings = Array.from(headings).map((heading) => ({
     text: heading.textContent,
@@ -20,7 +20,9 @@ function extractHeading(): FlatHeading[] {
   return flatHeadings;
 }
 
-const convertToNestedHeading = (flatHeadings: FlatHeading[]): NestedHeading[] => {
+const convertToNestedHeading = (
+  flatHeadings: FlatHeading[]
+): NestedHeading[] => {
   const root: { Children: NestedHeading[] } = {
     Children: [],
   };
@@ -33,7 +35,10 @@ const convertToNestedHeading = (flatHeadings: FlatHeading[]): NestedHeading[] =>
       Children: [],
     };
 
-    while (stack.length > 1 && (stack[stack.length - 1] as NestedHeading).level >= node.level) {
+    while (
+      stack.length > 1 &&
+      (stack[stack.length - 1] as NestedHeading).level >= node.level
+    ) {
       stack.pop();
     }
     stack[stack.length - 1].Children.push(node);
@@ -45,13 +50,13 @@ const convertToNestedHeading = (flatHeadings: FlatHeading[]): NestedHeading[] =>
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.action === "updateSidePanel") {
-    console.log("content script received updateSidePanel message");
     const headings = extractHeading();
     const nestedHeadings = convertToNestedHeading(headings);
-    console.log("sending headings to sidepanel:", nestedHeadings);
+    const title = document.title || document.querySelector("h1");
 
     chrome.runtime.sendMessage({
-      action: "sendNestedHeadings",
+      action: "sendPageInfo",
+      title,
       nestedHeadings,
     });
   } else if (message && message.action === "scrollToHeading") {
@@ -60,6 +65,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 function scrollToHeading(headingText: string) {
-  const heading = Array.from(document.querySelectorAll("h1, h2, h3, h4, h5, h6")).find((h) => h.textContent === headingText);
+  const heading = Array.from(
+    document.querySelectorAll("h1, h2, h3, h4, h5, h6")
+  ).find((h) => h.textContent === headingText);
   heading?.scrollIntoView({ behavior: "smooth" });
 }
