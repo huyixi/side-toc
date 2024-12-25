@@ -64,6 +64,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     scrollToHeading(headingText);
   }
 });
+
 function scrollToHeading(headingText: string) {
   const heading = Array.from(
     document.querySelectorAll("h1, h2, h3, h4, h5, h6")

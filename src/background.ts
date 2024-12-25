@@ -1,18 +1,16 @@
-chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch((error) => console.error(error));
+chrome.sidePanel
+  .setPanelBehavior({ openPanelOnActionClick: true })
+  .catch((error) => console.error(error));
 
 async function getActivateTabId() {
-  try {
-    const [tabs] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (tabs) {
-      return tabs.id;
-    } else {
-      console.error("No activate Tab found!");
-    }
-  } catch (e) {
-    console.error("getActivateTabId error", e);
+  const tabs = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (tabs) {
+    return tabs[0].id;
+  } else {
+    console.error("No activate Tab found!");
   }
 }
 

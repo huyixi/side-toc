@@ -3,28 +3,41 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 const SidePanel = () => {
-  const [nestedHeading, setNestedHeading] = useState([]);
+  const [nestedHeading, setNestedHeading] = useState<NestedHeading[]>([]);
   const [title, setTitle] = useState("");
+
+  function sendUpdateSidePanel() {
+    console.log("senddddddd");
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      if (tab.id) {
+        console.log("sendd2222");
+        chrome.runtime.sendMessage({ action: "updateSidePanel" });
+      }
+    });
+  }
+
+  function updateSidePanel(pageInfo: PageInfo) {
+    setNestedHeading(pageInfo.nestedHeadings);
+    setTitle(pageInfo.title);
+  }
 
   useEffect(() => {
     const messageListener = (message: any, sender: any, sendResponse: any) => {
       if (message && message.action === "sendPageInfo") {
-        setNestedHeading(message.nestedHeadings);
-        setTitle(message.title);
+        console.log("sidepanel receive sendpageinfo message");
+        updateSidePanel(message);
       }
       return true;
     };
 
     chrome.runtime.onMessage.addListener(messageListener);
 
-    return;
-  }, [nestedHeading]);
+    sendUpdateSidePanel();
 
-  interface NestedHeading {
-    text: string;
-    level: number;
-    Children?: NestedHeading[];
-  }
+    return () => {
+      chrome.runtime.onMessage.removeListener(messageListener);
+    };
+  }, [nestedHeading]);
 
   const HeadingTree = ({ data }: { data: NestedHeading[] }) => {
     if (!Array.isArray(data) || data.length === 0) {
