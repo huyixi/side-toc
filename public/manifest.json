@@ -3,7 +3,7 @@
 
   "name": "SideTOC",
   "description": "Generates a table of contents for the current page based on header tags.",
-  "version": "0.0.1",
+  "version": "1.0.0",
 
   "icons": {
     "16": "./icon16.png",
