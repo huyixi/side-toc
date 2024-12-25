@@ -35,7 +35,7 @@ const SidePanel = () => {
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
     };
-  }, [nestedHeading]);
+  }, []);
 
   const HeadingTree = ({ data }: { data: NestedHeading[] }) => {
     if (!Array.isArray(data) || data.length === 0) {

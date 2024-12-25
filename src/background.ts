@@ -34,9 +34,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 chrome.action.onClicked.addListener((tab) => {
-  console.log("tab1111", tab);
   if (tab.id) {
-    console.log("tab22222", tab);
     chrome.scripting.executeScript({
       target: { tabId: tab.id },
       func: updateSidePanel,
