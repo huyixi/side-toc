@@ -44,7 +44,6 @@ const convertToNestedHeading = (
     stack[stack.length - 1].Children.push(node);
     stack.push(node);
   }
-  console.log("root", root);
   return root.Children;
 };
 
@@ -63,6 +62,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const headingText = message.headingText;
     scrollToHeading(headingText);
   }
+  return true;
 });
 
 function scrollToHeading(headingText: string) {

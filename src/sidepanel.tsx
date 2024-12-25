@@ -11,7 +11,7 @@ const SidePanel = () => {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (tab.id) {
         console.log("sendd2222");
-        chrome.runtime.sendMessage({ action: "updateSidePanel" });
+        chrome.tabs.sendMessage(tab.id, { action: "updateSidePanel" });
       }
     });
   }
@@ -37,7 +37,7 @@ const SidePanel = () => {
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
     };
-  }, [nestedHeading]);
+  }, []);
 
   const HeadingTree = ({ data }: { data: NestedHeading[] }) => {
     if (!Array.isArray(data) || data.length === 0) {
@@ -47,32 +47,24 @@ const SidePanel = () => {
     return (
       <ul className="heading-tree-x">
         {data.map((heading: NestedHeading) => (
-          <li
-            key={heading.text}
-            style={{ marginLeft: `${heading.level * 4}px` }}
-          >
+          <li key={heading.text} style={{ marginLeft: `${heading.level * 4}px` }}>
             <a
               href={`#${heading.text?.toLowerCase().replace(/\s+/g, "-")}`}
               onClick={(e) => {
                 e.preventDefault();
-                chrome.tabs.query(
-                  { active: true, currentWindow: true },
-                  ([tab]) => {
-                    if (tab.id) {
-                      chrome.tabs.sendMessage(tab.id, {
-                        action: "scrollToHeading",
-                        headingText: heading.text,
-                      });
-                    }
+                chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+                  if (tab.id) {
+                    chrome.tabs.sendMessage(tab.id, {
+                      action: "scrollToHeading",
+                      headingText: heading.text,
+                    });
                   }
-                );
+                });
               }}
             >
               {heading.text}
             </a>
-            {heading.Children && heading.Children.length > 0 && (
-              <HeadingTree data={heading.Children} />
-            )}
+            {heading.Children && heading.Children.length > 0 && <HeadingTree data={heading.Children} />}
           </li>
         ))}
       </ul>
