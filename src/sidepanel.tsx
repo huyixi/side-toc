@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
+const ACTIVE_TAB_POLL_INTERVAL_MS = 800;
 
 const DEFAULT_SETTINGS: TocSettings = {
   includeH1: false,
@@ -35,10 +36,29 @@ const SidePanel = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [activeHeadingId, setActiveHeadingId] = useState("");
   const [compactMode, setCompactMode] = useState(false);
+  const activeTabIdRef = useRef<number | null>(null);
+  const activeTabUrlRef = useRef<string | null>(null);
 
   function loadSettings() {
     chrome.storage.sync.get(DEFAULT_SETTINGS, (items) => {
       setCompactMode(Boolean(items.compactMode));
+    });
+  }
+
+  function sendMessageToTab(
+    tabId: number,
+    payload: Record<string, unknown>,
+    onConnectionError?: () => void
+  ) {
+    activeTabIdRef.current = tabId;
+    chrome.tabs.sendMessage(tabId, payload, () => {
+      const messageError = chrome.runtime.lastError;
+      if (messageError) {
+        if (isIgnorableMessageError(messageError.message)) {
+          return;
+        }
+        onConnectionError?.();
+      }
     });
   }
 
@@ -48,35 +68,34 @@ const SidePanel = () => {
   ) {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab.id) {
+        activeTabIdRef.current = null;
+        activeTabUrlRef.current = null;
         onConnectionError?.();
         return;
       }
 
-      chrome.tabs.sendMessage(tab.id, payload, () => {
-        const messageError = chrome.runtime.lastError;
-        if (messageError) {
-          if (isIgnorableMessageError(messageError.message)) {
-            return;
-          }
-          onConnectionError?.();
-        }
-      });
+      activeTabUrlRef.current = typeof tab.url === "string" ? tab.url : null;
+      sendMessageToTab(tab.id, payload, onConnectionError);
     });
   }
 
-  function sendUpdateSidePanel() {
+  function sendUpdateSidePanel(tabId?: number) {
     setStatus("loading");
     setErrorMessage("");
 
-    sendMessageToActiveTab(
-      { action: "updateSidePanel" },
-      () => {
-        setStatus("error");
-        setErrorMessage(
-          "This page cannot be scanned (for example Chrome internal pages)."
-        );
-      }
-    );
+    const onConnectionError = () => {
+      setStatus("error");
+      setErrorMessage(
+        "This page cannot be scanned (for example Chrome internal pages)."
+      );
+    };
+
+    if (typeof tabId === "number") {
+      sendMessageToTab(tabId, { action: "updateSidePanel" }, onConnectionError);
+      return;
+    }
+
+    sendMessageToActiveTab({ action: "updateSidePanel" }, onConnectionError);
   }
 
   function updateSidePanel(pageInfo: PageInfo) {
@@ -95,8 +114,20 @@ const SidePanel = () => {
   }
 
   useEffect(() => {
-    const messageListener = (message: any) => {
+    const messageListener = (
+      message: any,
+      sender: chrome.runtime.MessageSender
+    ) => {
       if (!message) {
+        return;
+      }
+
+      const senderTabId = sender.tab?.id;
+      if (
+        typeof senderTabId === "number" &&
+        typeof activeTabIdRef.current === "number" &&
+        senderTabId !== activeTabIdRef.current
+      ) {
         return;
       }
 
@@ -127,15 +158,78 @@ const SidePanel = () => {
       }
     };
 
+    const tabActivatedListener = (activeInfo: chrome.tabs.TabActiveInfo) => {
+      chrome.tabs.get(activeInfo.tabId, (tab) => {
+        if (chrome.runtime.lastError) {
+          return;
+        }
+        activeTabUrlRef.current = typeof tab?.url === "string" ? tab.url : null;
+      });
+      sendUpdateSidePanel(activeInfo.tabId);
+    };
+
+    const tabUpdatedListener = (
+      tabId: number,
+      changeInfo: chrome.tabs.TabChangeInfo,
+      tab: chrome.tabs.Tab
+    ) => {
+      if (!tab.active) {
+        return;
+      }
+
+      if (changeInfo.status === "complete" || typeof changeInfo.url === "string") {
+        activeTabUrlRef.current = typeof tab.url === "string" ? tab.url : null;
+        sendUpdateSidePanel(tabId);
+      }
+    };
+
+    const windowFocusChangedListener = (windowId: number) => {
+      if (windowId === chrome.windows.WINDOW_ID_NONE) {
+        return;
+      }
+      sendUpdateSidePanel();
+    };
+
+    const syncActiveTab = () => {
+      chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+        const tabId = typeof tab?.id === "number" ? tab.id : null;
+        const tabUrl = typeof tab?.url === "string" ? tab.url : null;
+
+        if (tabId === null) {
+          activeTabIdRef.current = null;
+          activeTabUrlRef.current = null;
+          return;
+        }
+
+        const isChanged =
+          tabId !== activeTabIdRef.current || tabUrl !== activeTabUrlRef.current;
+
+        if (!isChanged) {
+          return;
+        }
+
+        activeTabUrlRef.current = tabUrl;
+        sendUpdateSidePanel(tabId);
+      });
+    };
+
     chrome.runtime.onMessage.addListener(messageListener);
     chrome.storage.onChanged.addListener(storageListener);
+    chrome.tabs.onActivated.addListener(tabActivatedListener);
+    chrome.tabs.onUpdated.addListener(tabUpdatedListener);
+    chrome.windows.onFocusChanged.addListener(windowFocusChangedListener);
 
     loadSettings();
     sendUpdateSidePanel();
+    const syncInterval = window.setInterval(syncActiveTab, ACTIVE_TAB_POLL_INTERVAL_MS);
 
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
       chrome.storage.onChanged.removeListener(storageListener);
+      chrome.tabs.onActivated.removeListener(tabActivatedListener);
+      chrome.tabs.onUpdated.removeListener(tabUpdatedListener);
+      chrome.windows.onFocusChanged.removeListener(windowFocusChangedListener);
+      window.clearInterval(syncInterval);
     };
   }, []);
 
