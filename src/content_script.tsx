@@ -13,6 +13,7 @@ interface HeadingSnapshot extends FlatHeading {
 }
 
 const UPDATE_DEBOUNCE_MS = 150;
+const URL_POLL_INTERVAL_MS = 1000;
 const ACTIVE_HEADING_TOP_OFFSET = 120;
 
 const DEFAULT_SETTINGS: TocSettings = {
@@ -330,17 +331,22 @@ function setupAutoSync() {
   };
 
   const observer = new MutationObserver(() => {
-    scheduleSync();
+    sendPageInfo();
   });
 
   if (document.documentElement) {
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
+      characterData: true,
     });
   }
 
   const cleanupHistorySync = setupHistorySync(scheduleSyncOnUrlChange);
+  const urlPollIntervalId = window.setInterval(
+    scheduleSyncOnUrlChange,
+    URL_POLL_INTERVAL_MS
+  );
 
   window.addEventListener("popstate", scheduleSyncOnUrlChange);
   window.addEventListener("hashchange", scheduleSyncOnUrlChange);
@@ -351,6 +357,7 @@ function setupAutoSync() {
     }
     observer.disconnect();
     cleanupHistorySync();
+    window.clearInterval(urlPollIntervalId);
     window.removeEventListener("popstate", scheduleSyncOnUrlChange);
     window.removeEventListener("hashchange", scheduleSyncOnUrlChange);
   };

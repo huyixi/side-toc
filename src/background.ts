@@ -2,19 +2,40 @@ chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
   .catch((error) => console.error(error));
 
-function isIgnorableMessageError(message?: string): boolean {
+function isTransientMessageError(message?: string): boolean {
   if (!message) {
     return false;
   }
 
   return (
-    message.includes("Could not establish connection. Receiving end does not exist.") ||
     message.includes("A listener indicated an asynchronous response") ||
     message.includes("The message port closed before a response was received")
   );
 }
 
-async function getTabId() {
+function isUnsupportedPageError(message?: string): boolean {
+  if (!message) {
+    return false;
+  }
+
+  return message.includes(
+    "Could not establish connection. Receiving end does not exist."
+  );
+}
+
+function notifySidePanelSyncError(tabId: number) {
+  chrome.runtime.sendMessage(
+    {
+      action: "sidePanelSyncError",
+      tabId,
+    },
+    () => {
+      void chrome.runtime.lastError;
+    }
+  );
+}
+
+async function getActiveTabId() {
   const tabs = await chrome.tabs.query({
     active: true,
     currentWindow: true,
@@ -27,31 +48,43 @@ async function getTabId() {
   }
 }
 
-function updateSidePanelForTab(tabId?: number) {
+function updateSidePanelForTab(tabId?: number): Promise<boolean> {
   if (!tabId) {
-    return;
+    return Promise.resolve(false);
   }
 
-  chrome.tabs.sendMessage(tabId, { action: "updateSidePanel" }, () => {
-    const messageError = chrome.runtime.lastError;
-    if (!messageError || isIgnorableMessageError(messageError.message)) {
-      return;
-    }
-    console.error(messageError.message);
+  return new Promise((resolve) => {
+    chrome.tabs.sendMessage(tabId, { action: "updateSidePanel" }, () => {
+      const messageError = chrome.runtime.lastError;
+      if (!messageError) {
+        resolve(true);
+        return;
+      }
+
+      if (!isTransientMessageError(messageError.message)) {
+        console.error(messageError.message);
+      }
+
+      if (isUnsupportedPageError(messageError.message)) {
+        notifySidePanelSyncError(tabId);
+      }
+
+      resolve(false);
+    });
   });
 }
 
 async function updateSidePanel() {
-  const tabId = await getTabId();
-  updateSidePanelForTab(tabId ?? undefined);
+  const tabId = await getActiveTabId();
+  return updateSidePanelForTab(tabId ?? undefined);
 }
 
 chrome.tabs.onCreated.addListener(() => {
-  updateSidePanel();
+  void updateSidePanel();
 });
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
-  updateSidePanelForTab(activeInfo.tabId);
+  void updateSidePanelForTab(activeInfo.tabId);
 });
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
@@ -60,7 +93,7 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   }
 
   if (changeInfo.status === "complete" || typeof changeInfo.url === "string") {
-    updateSidePanelForTab(tabId);
+    void updateSidePanelForTab(tabId);
   }
 });
 
@@ -68,5 +101,25 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
   if (windowId === chrome.windows.WINDOW_ID_NONE) {
     return;
   }
-  updateSidePanel();
+  void updateSidePanel();
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (sender.id !== chrome.runtime.id) {
+    return false;
+  }
+
+  if (message && message.action === "refreshActiveTabToc") {
+    updateSidePanel()
+      .then((ok) => {
+        sendResponse({ ok });
+      })
+      .catch((error) => {
+        console.error(error);
+        sendResponse({ ok: false });
+      });
+    return true;
+  }
+
+  return false;
 });

@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 
 type LoadState = "loading" | "ready" | "empty" | "error";
-const ACTIVE_TAB_POLL_INTERVAL_MS = 800;
 
 const DEFAULT_SETTINGS: TocSettings = {
   includeH1: false,
@@ -31,11 +30,46 @@ const SidePanel = () => {
   const [activeHeadingId, setActiveHeadingId] = useState("");
   const [compactMode, setCompactMode] = useState(false);
   const activeTabIdRef = useRef<number | null>(null);
-  const activeTabUrlRef = useRef<string | null>(null);
 
   function loadSettings() {
     chrome.storage.sync.get(DEFAULT_SETTINGS, (items) => {
       setCompactMode(Boolean(items.compactMode));
+    });
+  }
+
+  function showPageScanError() {
+    setNestedHeadings([]);
+    setActiveHeadingId("");
+    setStatus("error");
+    setErrorMessage(
+      "This page cannot be scanned (for example Chrome internal pages)."
+    );
+  }
+
+  function syncActiveTab() {
+    chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
+      const tabId = typeof tab?.id === "number" ? tab.id : null;
+      activeTabIdRef.current = tabId;
+      setStatus("loading");
+      setErrorMessage("");
+      setActiveHeadingId("");
+    });
+  }
+
+  function requestRefreshFromBackground() {
+    setStatus("loading");
+    setErrorMessage("");
+
+    chrome.runtime.sendMessage({ action: "refreshActiveTabToc" }, (response) => {
+      const messageError = chrome.runtime.lastError;
+      if (messageError && !isIgnorableMessageError(messageError.message)) {
+        showPageScanError();
+        return;
+      }
+
+      if (!response || response.ok !== true) {
+        showPageScanError();
+      }
     });
   }
 
@@ -63,33 +97,12 @@ const SidePanel = () => {
     chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
       if (!tab.id) {
         activeTabIdRef.current = null;
-        activeTabUrlRef.current = null;
         onConnectionError?.();
         return;
       }
 
-      activeTabUrlRef.current = typeof tab.url === "string" ? tab.url : null;
       sendMessageToTab(tab.id, payload, onConnectionError);
     });
-  }
-
-  function sendUpdateSidePanel(tabId?: number) {
-    setStatus("loading");
-    setErrorMessage("");
-
-    const onConnectionError = () => {
-      setStatus("error");
-      setErrorMessage(
-        "This page cannot be scanned (for example Chrome internal pages)."
-      );
-    };
-
-    if (typeof tabId === "number") {
-      sendMessageToTab(tabId, { action: "updateSidePanel" }, onConnectionError);
-      return;
-    }
-
-    sendMessageToActiveTab({ action: "updateSidePanel" }, onConnectionError);
   }
 
   function updateSidePanel(pageInfo: PageInfo) {
@@ -126,6 +139,9 @@ const SidePanel = () => {
       }
 
       if (message.action === "sendPageInfo") {
+        if (typeof senderTabId === "number") {
+          activeTabIdRef.current = senderTabId;
+        }
         updateSidePanel({
           title: message.title,
           nestedHeadings: message.nestedHeadings,
@@ -136,6 +152,23 @@ const SidePanel = () => {
         setActiveHeadingId(
           typeof message.headingId === "string" ? message.headingId : ""
         );
+      }
+
+      if (message.action === "sidePanelSyncError") {
+        const failedTabId =
+          typeof message.tabId === "number" ? message.tabId : null;
+        if (
+          failedTabId !== null &&
+          typeof activeTabIdRef.current === "number" &&
+          failedTabId !== activeTabIdRef.current
+        ) {
+          return;
+        }
+
+        if (failedTabId !== null) {
+          activeTabIdRef.current = failedTabId;
+        }
+        showPageScanError();
       }
     };
 
@@ -153,77 +186,33 @@ const SidePanel = () => {
     };
 
     const tabActivatedListener = (activeInfo: chrome.tabs.TabActiveInfo) => {
-      chrome.tabs.get(activeInfo.tabId, (tab) => {
-        if (chrome.runtime.lastError) {
-          return;
-        }
-        activeTabUrlRef.current = typeof tab?.url === "string" ? tab.url : null;
-      });
-      sendUpdateSidePanel(activeInfo.tabId);
-    };
-
-    const tabUpdatedListener = (
-      tabId: number,
-      changeInfo: chrome.tabs.TabChangeInfo,
-      tab: chrome.tabs.Tab
-    ) => {
-      if (!tab.active) {
-        return;
-      }
-
-      if (changeInfo.status === "complete" || typeof changeInfo.url === "string") {
-        activeTabUrlRef.current = typeof tab.url === "string" ? tab.url : null;
-        sendUpdateSidePanel(tabId);
-      }
+      activeTabIdRef.current = activeInfo.tabId;
+      setStatus("loading");
+      setErrorMessage("");
+      setActiveHeadingId("");
     };
 
     const windowFocusChangedListener = (windowId: number) => {
       if (windowId === chrome.windows.WINDOW_ID_NONE) {
         return;
       }
-      sendUpdateSidePanel();
-    };
-
-    const syncActiveTab = () => {
-      chrome.tabs.query({ active: true, currentWindow: true }, ([tab]) => {
-        const tabId = typeof tab?.id === "number" ? tab.id : null;
-        const tabUrl = typeof tab?.url === "string" ? tab.url : null;
-
-        if (tabId === null) {
-          activeTabIdRef.current = null;
-          activeTabUrlRef.current = null;
-          return;
-        }
-
-        const isChanged =
-          tabId !== activeTabIdRef.current || tabUrl !== activeTabUrlRef.current;
-
-        if (!isChanged) {
-          return;
-        }
-
-        activeTabUrlRef.current = tabUrl;
-        sendUpdateSidePanel(tabId);
-      });
+      syncActiveTab();
     };
 
     chrome.runtime.onMessage.addListener(messageListener);
     chrome.storage.onChanged.addListener(storageListener);
     chrome.tabs.onActivated.addListener(tabActivatedListener);
-    chrome.tabs.onUpdated.addListener(tabUpdatedListener);
     chrome.windows.onFocusChanged.addListener(windowFocusChangedListener);
 
     loadSettings();
-    sendUpdateSidePanel();
-    const syncInterval = window.setInterval(syncActiveTab, ACTIVE_TAB_POLL_INTERVAL_MS);
+    syncActiveTab();
+    requestRefreshFromBackground();
 
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
       chrome.storage.onChanged.removeListener(storageListener);
       chrome.tabs.onActivated.removeListener(tabActivatedListener);
-      chrome.tabs.onUpdated.removeListener(tabUpdatedListener);
       chrome.windows.onFocusChanged.removeListener(windowFocusChangedListener);
-      window.clearInterval(syncInterval);
     };
   }, []);
 
