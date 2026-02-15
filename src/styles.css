@@ -3,6 +3,7 @@
   --muted-text: #64748b;
   --border: #e2e8f0;
   --accent: #2563eb;
+  --surface: #ffffff;
 }
 
 * {
@@ -85,12 +86,17 @@ body {
 .toc-link {
   display: block;
   width: 100%;
+  border: 0;
+  background: transparent;
   border-radius: 4px;
   padding: 2px 4px;
   color: #111827;
   text-decoration: none;
+  text-align: left;
   font-size: 0.9rem;
   line-height: 1.35;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 .toc-link:hover {
@@ -224,5 +230,3 @@ body {
     width: 100%;
   }
 }
-
-/*# sourceMappingURL=styles.css.map */

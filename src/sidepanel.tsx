@@ -245,12 +245,11 @@ const SidePanel = () => {
 
           return (
             <li className="toc-item" key={heading.id}>
-              <a
+              <button
+                type="button"
                 className={`toc-link ${isActive ? "toc-link-active" : ""}`}
                 aria-current={isActive ? "location" : undefined}
-                href={`#${heading.id}`}
-                onClick={(e) => {
-                  e.preventDefault();
+                onClick={() => {
                   setActiveHeadingId(heading.id);
 
                   sendMessageToActiveTab(
@@ -268,7 +267,7 @@ const SidePanel = () => {
                 }}
               >
                 <span className="toc-label">{heading.text}</span>
-              </a>
+              </button>
               {heading.Children.length > 0 && (
                 <HeadingTree data={heading.Children} depth={depth + 1} />
               )}

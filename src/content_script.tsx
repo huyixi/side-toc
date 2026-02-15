@@ -8,8 +8,11 @@ interface NestedHeading extends FlatHeading {
   Children: NestedHeading[];
 }
 
+interface HeadingSnapshot extends FlatHeading {
+  element: HTMLHeadingElement;
+}
+
 const UPDATE_DEBOUNCE_MS = 150;
-const URL_POLL_INTERVAL_MS = 500;
 const ACTIVE_HEADING_TOP_OFFSET = 120;
 
 const DEFAULT_SETTINGS: TocSettings = {
@@ -30,6 +33,7 @@ let currentSettings: TocSettings = { ...DEFAULT_SETTINGS };
 let lastSentSignature = "";
 let lastActiveHeadingId = "";
 let scheduleActiveHeadingUpdate: (() => void) | null = null;
+let headingSnapshotCache: HeadingSnapshot[] = [];
 
 function normalizeSettings(
   rawSettings?: Partial<TocSettings>
@@ -88,57 +92,41 @@ function getHeadingText(heading: Element): string {
   return text && text.length > 0 ? text : "Untitled section";
 }
 
-function ensureUniqueHeadingId(
-  heading: HTMLHeadingElement,
-  usedIds: Set<string>
-): string {
-  const existingId = heading.id.trim();
-  const baseId =
-    existingId.length > 0 ? existingId : slugify(getHeadingText(heading));
-  const normalizedBaseId = baseId.length > 0 ? baseId : "section";
-  let candidateId = normalizedBaseId;
-  let suffix = 2;
-
-  while (
-    usedIds.has(candidateId) ||
-    (document.getElementById(candidateId) !== null &&
-      document.getElementById(candidateId) !== heading)
-  ) {
-    candidateId = `${normalizedBaseId}-${suffix}`;
-    suffix += 1;
-  }
-
-  if (heading.id !== candidateId) {
-    heading.id = candidateId;
-  }
-  usedIds.add(candidateId);
-
-  return candidateId;
-}
-
-function getHeadingElementsWithIds(): HTMLHeadingElement[] {
+function getHeadingElements(): HTMLHeadingElement[] {
   const selector = getHeadingSelector();
   if (!selector) {
     return [];
   }
 
-  const headings = document.querySelectorAll<HTMLHeadingElement>(selector);
-  const usedIds = new Set<string>();
-  const headingArray = Array.from(headings);
-
-  headingArray.forEach((heading) => {
-    ensureUniqueHeadingId(heading, usedIds);
-  });
-
-  return headingArray;
+  return Array.from(document.querySelectorAll<HTMLHeadingElement>(selector));
 }
 
-function extractHeadings(): FlatHeading[] {
-  const headings = getHeadingElementsWithIds();
-  return headings.map((heading) => ({
-    id: heading.id,
-    text: getHeadingText(heading),
-    level: parseInt(heading.tagName.substring(1), 10),
+function collectHeadingSnapshots(): HeadingSnapshot[] {
+  const headings = getHeadingElements();
+  const usedIds = new Map<string, number>();
+
+  return headings.map((heading) => {
+    const text = getHeadingText(heading);
+    const level = Number.parseInt(heading.tagName.substring(1), 10);
+    const normalizedLevel = Number.isFinite(level) ? level : 6;
+    const baseId = `h${normalizedLevel}-${slugify(text) || "section"}`;
+    const occurrenceCount = (usedIds.get(baseId) ?? 0) + 1;
+    usedIds.set(baseId, occurrenceCount);
+
+    return {
+      id: occurrenceCount > 1 ? `${baseId}-${occurrenceCount}` : baseId,
+      text,
+      level: normalizedLevel,
+      element: heading,
+    };
+  });
+}
+
+function extractHeadingsFromCache(): FlatHeading[] {
+  return headingSnapshotCache.map(({ id, text, level }) => ({
+    id,
+    text,
+    level,
   }));
 }
 
@@ -182,7 +170,8 @@ function getPageTitle(): string {
 }
 
 function getPageInfo(): { pageInfo: PageInfo; signature: string } {
-  const headings = extractHeadings();
+  headingSnapshotCache = collectHeadingSnapshots();
+  const headings = extractHeadingsFromCache();
   const nestedHeadings = convertToNestedHeadings(headings);
   const title = getPageTitle();
   const signature = [
@@ -202,16 +191,22 @@ function getPageInfo(): { pageInfo: PageInfo; signature: string } {
 }
 
 function getCurrentActiveHeadingId(): string {
-  const headings = getHeadingElementsWithIds();
-  if (headings.length === 0) {
+  if (headingSnapshotCache.length === 0) {
+    headingSnapshotCache = collectHeadingSnapshots();
+  }
+
+  const connectedHeadings = headingSnapshotCache.filter(({ element }) =>
+    element.isConnected
+  );
+  if (connectedHeadings.length === 0) {
     return "";
   }
 
   // Prefer the first heading currently visible in the viewport.
   // This keeps parent sections (for example h1) active until they leave view.
   const viewportHeight = window.innerHeight;
-  const firstVisibleHeading = headings.find((heading) => {
-    const rect = heading.getBoundingClientRect();
+  const firstVisibleHeading = connectedHeadings.find(({ element }) => {
+    const rect = element.getBoundingClientRect();
     return rect.bottom > 0 && rect.top < viewportHeight;
   });
 
@@ -221,9 +216,9 @@ function getCurrentActiveHeadingId(): string {
 
   // Fallback when no heading is visible (for example between sections):
   // use the most recent heading above the reading line.
-  let activeHeading = headings[0];
-  for (const heading of headings) {
-    if (heading.getBoundingClientRect().top <= ACTIVE_HEADING_TOP_OFFSET) {
+  let activeHeading = connectedHeadings[0];
+  for (const heading of connectedHeadings) {
+    if (heading.element.getBoundingClientRect().top <= ACTIVE_HEADING_TOP_OFFSET) {
       activeHeading = heading;
       continue;
     }
@@ -273,7 +268,14 @@ function sendPageInfo(force = false) {
 }
 
 function scrollToHeading(headingId: string) {
-  const heading = document.getElementById(headingId);
+  let heading = headingSnapshotCache.find(
+    (entry) => entry.id === headingId && entry.element.isConnected
+  )?.element;
+  if (!heading) {
+    headingSnapshotCache = collectHeadingSnapshots();
+    heading = headingSnapshotCache.find((entry) => entry.id === headingId)?.element;
+  }
+
   if (!heading) {
     return;
   }
@@ -282,6 +284,26 @@ function scrollToHeading(headingId: string) {
     behavior: currentSettings.smoothScroll ? "smooth" : "auto",
     block: "start",
   });
+}
+
+function setupHistorySync(onChange: () => void): () => void {
+  const originalPushState = history.pushState.bind(history);
+  const originalReplaceState = history.replaceState.bind(history);
+
+  history.pushState = ((...args: Parameters<History["pushState"]>) => {
+    originalPushState(...args);
+    onChange();
+  }) as History["pushState"];
+
+  history.replaceState = ((...args: Parameters<History["replaceState"]>) => {
+    originalReplaceState(...args);
+    onChange();
+  }) as History["replaceState"];
+
+  return () => {
+    history.pushState = originalPushState as History["pushState"];
+    history.replaceState = originalReplaceState as History["replaceState"];
+  };
 }
 
 function setupAutoSync() {
@@ -299,6 +321,14 @@ function setupAutoSync() {
     }, UPDATE_DEBOUNCE_MS);
   };
 
+  const scheduleSyncOnUrlChange = () => {
+    if (location.href === previousUrl) {
+      return;
+    }
+    previousUrl = location.href;
+    scheduleSync();
+  };
+
   const observer = new MutationObserver(() => {
     scheduleSync();
   });
@@ -307,19 +337,23 @@ function setupAutoSync() {
     observer.observe(document.documentElement, {
       childList: true,
       subtree: true,
-      characterData: true,
     });
   }
 
-  window.setInterval(() => {
-    if (location.href !== previousUrl) {
-      previousUrl = location.href;
-      scheduleSync();
-    }
-  }, URL_POLL_INTERVAL_MS);
+  const cleanupHistorySync = setupHistorySync(scheduleSyncOnUrlChange);
 
-  window.addEventListener("popstate", scheduleSync);
-  window.addEventListener("hashchange", scheduleSync);
+  window.addEventListener("popstate", scheduleSyncOnUrlChange);
+  window.addEventListener("hashchange", scheduleSyncOnUrlChange);
+
+  return () => {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+    observer.disconnect();
+    cleanupHistorySync();
+    window.removeEventListener("popstate", scheduleSyncOnUrlChange);
+    window.removeEventListener("hashchange", scheduleSyncOnUrlChange);
+  };
 }
 
 function setupActiveHeadingTracking() {
