@@ -23,12 +23,6 @@ function isIgnorableMessageError(message?: string): boolean {
   );
 }
 
-function countHeadings(items: NestedHeading[]): number {
-  return items.reduce((count, heading) => {
-    return count + 1 + countHeadings(heading.Children);
-  }, 0);
-}
-
 const SidePanel = () => {
   const [nestedHeadings, setNestedHeadings] = useState<NestedHeading[]>([]);
   const [title, setTitle] = useState("");
@@ -285,17 +279,10 @@ const SidePanel = () => {
     );
   };
 
-  const headingCount = countHeadings(nestedHeadings);
-
   return (
     <div className={`panel-root ${compactMode ? "panel-root-compact" : ""}`}>
       <header className="panel-header">
         <h1 className="panel-title">{title || "Table of Contents"}</h1>
-        {status === "ready" && (
-          <p className="panel-meta">
-            {headingCount} {headingCount === 1 ? "heading" : "headings"}
-          </p>
-        )}
       </header>
 
       {status === "loading" && <p className="panel-state">Loading headings...</p>}
