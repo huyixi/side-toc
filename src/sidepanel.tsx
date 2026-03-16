@@ -151,6 +151,7 @@ const SidePanel = () => {
   }
 
   useEffect(() => {
+    const sidePanelPort = chrome.runtime.connect({ name: "sidepanel" });
     const messageListener = (
       message: any,
       sender: chrome.runtime.MessageSender
@@ -184,22 +185,27 @@ const SidePanel = () => {
         );
       }
 
-      if (message.action === "sidePanelSyncError") {
-        const failedTabId =
-          typeof message.tabId === "number" ? message.tabId : null;
-        if (
-          failedTabId !== null &&
-          typeof activeTabIdRef.current === "number" &&
-          failedTabId !== activeTabIdRef.current
-        ) {
-          return;
-        }
+    };
 
-        if (failedTabId !== null) {
-          activeTabIdRef.current = failedTabId;
-        }
-        applySyncError(message.reason);
+    const portMessageListener = (message: any) => {
+      if (message?.action !== "sidePanelSyncError") {
+        return;
       }
+
+      const failedTabId =
+        typeof message.tabId === "number" ? message.tabId : null;
+      if (
+        failedTabId !== null &&
+        typeof activeTabIdRef.current === "number" &&
+        failedTabId !== activeTabIdRef.current
+      ) {
+        return;
+      }
+
+      if (failedTabId !== null) {
+        activeTabIdRef.current = failedTabId;
+      }
+      applySyncError(message.reason);
     };
 
     const storageListener = (
@@ -230,6 +236,7 @@ const SidePanel = () => {
     };
 
     chrome.runtime.onMessage.addListener(messageListener);
+    sidePanelPort.onMessage.addListener(portMessageListener);
     chrome.storage.onChanged.addListener(storageListener);
     chrome.tabs.onActivated.addListener(tabActivatedListener);
     chrome.windows.onFocusChanged.addListener(windowFocusChangedListener);
@@ -240,6 +247,8 @@ const SidePanel = () => {
 
     return () => {
       chrome.runtime.onMessage.removeListener(messageListener);
+      sidePanelPort.onMessage.removeListener(portMessageListener);
+      sidePanelPort.disconnect();
       chrome.storage.onChanged.removeListener(storageListener);
       chrome.tabs.onActivated.removeListener(tabActivatedListener);
       chrome.windows.onFocusChanged.removeListener(windowFocusChangedListener);

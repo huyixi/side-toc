@@ -56,6 +56,17 @@ test("repairs missing receivers by injecting the content script and retrying", (
   );
 });
 
+test("only notifies connected side panels about sync errors", () => {
+  assert.match(backgroundSource, /const sidePanelPorts = new Set<chrome\.runtime\.Port>\(\);/);
+  assert.match(backgroundSource, /if \(sidePanelPorts\.size === 0\) \{\s*return;\s*\}/);
+  assert.match(backgroundSource, /chrome\.runtime\.onConnect\.addListener\(\(port\) => \{/);
+  assert.match(backgroundSource, /port\.postMessage\(message\);/);
+  assert.match(
+    sidePanelSource,
+    /const sidePanelPort = chrome\.runtime\.connect\(\{\s*name:\s*"sidepanel"\s*\}\);/
+  );
+});
+
 test("distinguishes unsupported pages from stale or missing content scripts", () => {
   assert.match(sidePanelSource, /status === "unsupported" \|\| status === "disconnected"/);
   assert.match(
