@@ -2,6 +2,7 @@
   "name": "side-toc",
   "version": "1.0.0",
   "description": "Generates a table of contents for the current page based on header tags.",
+  "packageManager": "pnpm@10.30.3",
   "main": "index.js",
   "scripts": {
     "watch": "webpack --config webpack/webpack.dev.js --watch",

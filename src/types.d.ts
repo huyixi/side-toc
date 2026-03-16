@@ -10,6 +10,8 @@ interface PageInfo {
   nestedHeadings: NestedHeading[];
 }
 
+type SidePanelSyncErrorReason = "unsupportedPage" | "missingContentScript";
+
 interface TocSettings {
   includeH1: boolean;
   maxDepth: number;
