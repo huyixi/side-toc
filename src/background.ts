@@ -16,6 +16,7 @@ const UNSUPPORTED_HOSTS = new Set([
   "chrome.google.com",
   "chromewebstore.google.com",
 ]);
+const sidePanelPorts = new Set<chrome.runtime.Port>();
 
 chrome.sidePanel
   .setPanelBehavior({ openPanelOnActionClick: true })
@@ -83,20 +84,26 @@ function isInjectablePageUrl(url?: string): boolean {
   }
 }
 
-function notifySidePanelSyncError(
-  tabId: number,
-  reason: SidePanelSyncErrorReason
-) {
-  chrome.runtime.sendMessage(
-    {
-      action: "sidePanelSyncError",
-      tabId,
-      reason,
-    },
-    () => {
-      void chrome.runtime.lastError;
+function broadcastToSidePanels(message: Record<string, unknown>) {
+  for (const port of sidePanelPorts) {
+    try {
+      port.postMessage(message);
+    } catch (_error) {
+      sidePanelPorts.delete(port);
     }
-  );
+  }
+}
+
+function notifySidePanelSyncError(tabId: number, reason: SidePanelSyncErrorReason) {
+  if (sidePanelPorts.size === 0) {
+    return;
+  }
+
+  broadcastToSidePanels({
+    action: "sidePanelSyncError",
+    tabId,
+    reason,
+  });
 }
 
 async function getActiveTabId() {
@@ -278,6 +285,17 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
     return;
   }
   void updateSidePanel();
+});
+
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "sidepanel" || port.sender?.id !== chrome.runtime.id) {
+    return;
+  }
+
+  sidePanelPorts.add(port);
+  port.onDisconnect.addListener(() => {
+    sidePanelPorts.delete(port);
+  });
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
