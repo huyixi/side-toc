@@ -2,7 +2,12 @@ import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import "./styles.css";
 
-type LoadState = "loading" | "ready" | "empty" | "error";
+type LoadState =
+  | "loading"
+  | "ready"
+  | "empty"
+  | "unsupported"
+  | "disconnected";
 
 const DEFAULT_SETTINGS: TocSettings = {
   includeH1: false,
@@ -37,13 +42,38 @@ const SidePanel = () => {
     });
   }
 
-  function showPageScanError() {
+  function setSyncErrorState(
+    state: Extract<LoadState, "unsupported" | "disconnected">,
+    message: string
+  ) {
     setNestedHeadings([]);
+    setTitle("");
     setActiveHeadingId("");
-    setStatus("error");
-    setErrorMessage(
+    setStatus(state);
+    setErrorMessage(message);
+  }
+
+  function showUnsupportedPageError() {
+    setSyncErrorState(
+      "unsupported",
       "This page cannot be scanned (for example Chrome internal pages)."
     );
+  }
+
+  function showMissingContentScriptError() {
+    setSyncErrorState(
+      "disconnected",
+      "This page is supported, but the content script is missing or stale. Reload the tab and try again."
+    );
+  }
+
+  function applySyncError(reason?: SidePanelSyncErrorReason) {
+    if (reason === "unsupportedPage") {
+      showUnsupportedPageError();
+      return;
+    }
+
+    showMissingContentScriptError();
   }
 
   function syncActiveTab() {
@@ -63,12 +93,12 @@ const SidePanel = () => {
     chrome.runtime.sendMessage({ action: "refreshActiveTabToc" }, (response) => {
       const messageError = chrome.runtime.lastError;
       if (messageError && !isIgnorableMessageError(messageError.message)) {
-        showPageScanError();
+        showMissingContentScriptError();
         return;
       }
 
       if (!response || response.ok !== true) {
-        showPageScanError();
+        applySyncError(response?.reason);
       }
     });
   }
@@ -168,7 +198,7 @@ const SidePanel = () => {
         if (failedTabId !== null) {
           activeTabIdRef.current = failedTabId;
         }
-        showPageScanError();
+        applySyncError(message.reason);
       }
     };
 
@@ -247,10 +277,7 @@ const SidePanel = () => {
                       headingId: heading.id,
                     },
                     () => {
-                      setStatus("error");
-                      setErrorMessage(
-                        "Could not connect to the page. Reload the tab and try again."
-                      );
+                      showMissingContentScriptError();
                     }
                   );
                 }}
@@ -277,7 +304,7 @@ const SidePanel = () => {
       {status === "empty" && (
         <p className="panel-state">No headings found on this page.</p>
       )}
-      {status === "error" && (
+      {(status === "unsupported" || status === "disconnected") && (
         <p className="panel-state panel-state-error">
           {errorMessage || "Unable to read this page."}
         </p>

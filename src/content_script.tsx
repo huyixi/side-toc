@@ -15,6 +15,7 @@ interface HeadingSnapshot extends FlatHeading {
 const UPDATE_DEBOUNCE_MS = 150;
 const URL_POLL_INTERVAL_MS = 1000;
 const ACTIVE_HEADING_TOP_OFFSET = 120;
+const CONTENT_SCRIPT_INITIALIZED_FLAG = "__SIDE_TOC_CONTENT_SCRIPT_INITIALIZED__";
 
 const DEFAULT_SETTINGS: TocSettings = {
   includeH1: false,
@@ -387,44 +388,55 @@ function setupActiveHeadingTracking() {
   schedule();
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (message && message.action === "updateSidePanel") {
-    sendPageInfo(true);
-    sendResponse({ ok: true });
-    return false;
-  }
-
-  if (message && message.action === "scrollToHeading") {
-    const headingId = message.headingId;
-    if (typeof headingId === "string") {
-      scrollToHeading(headingId);
+function initializeContentScript() {
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message && message.action === "updateSidePanel") {
+      sendPageInfo(true);
+      sendResponse({ ok: true });
+      return false;
     }
-    sendResponse({ ok: true });
+
+    if (message && message.action === "scrollToHeading") {
+      const headingId = message.headingId;
+      if (typeof headingId === "string") {
+        scrollToHeading(headingId);
+      }
+      sendResponse({ ok: true });
+      return false;
+    }
+
     return false;
-  }
+  });
 
-  return false;
-});
+  chrome.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName !== "sync") {
+      return;
+    }
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "sync") {
-    return;
-  }
+    const hasRelevantChange = TOC_SETTING_KEYS.some((key) => key in changes);
+    if (!hasRelevantChange) {
+      return;
+    }
 
-  const hasRelevantChange = TOC_SETTING_KEYS.some((key) => key in changes);
-  if (!hasRelevantChange) {
-    return;
-  }
+    loadSettings(() => {
+      lastSentSignature = "";
+      sendPageInfo(true);
+      scheduleActiveHeadingUpdate?.();
+    });
+  });
 
   loadSettings(() => {
-    lastSentSignature = "";
     sendPageInfo(true);
-    scheduleActiveHeadingUpdate?.();
+    setupAutoSync();
+    setupActiveHeadingTracking();
   });
-});
+}
 
-loadSettings(() => {
-  sendPageInfo(true);
-  setupAutoSync();
-  setupActiveHeadingTracking();
-});
+const contentScriptWindow = window as Window & {
+  __SIDE_TOC_CONTENT_SCRIPT_INITIALIZED__?: boolean;
+};
+
+if (!contentScriptWindow[CONTENT_SCRIPT_INITIALIZED_FLAG]) {
+  contentScriptWindow[CONTENT_SCRIPT_INITIALIZED_FLAG] = true;
+  initializeContentScript();
+}
