@@ -11,7 +11,7 @@
     "unzip": "rimraf dist && mkdir -p dist && unzip -o dist.zip -d dist",
     "build:unzip": "npm run build:zip && npm run unzip",
     "clean": "rimraf dist",
-    "test": "node --test test/**/*.test.mjs",
+    "test": "node --test test/*.test.mjs",
     "style": "prettier --write \"src/**/*.{ts,tsx}\""
   },
   "author": "huyixi",
